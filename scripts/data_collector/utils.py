@@ -202,12 +202,22 @@ def get_hs_stock_symbols() -> list:
             time.sleep(3)
         return _res
 
+    def get_local_hs_stock_symbols():
+        stock_list_path = Path("~/.qlib/tushare_data/stock_list.csv").expanduser().resolve()
+        stock_list = pd.read_csv(stock_list_path)
+        ts_codes = stock_list['ts_code'].values
+        return set(ts_codes)
+
     if _HS_SYMBOLS is None:
         symbols = set()
         _retry = 60
         # It may take multiple times to get the complete
         while len(symbols) < MINIMUM_SYMBOLS_NUM:
             symbols |= _get_symbol()
+            # if _get_symbol() fails because of 404, use local file
+            if len(symbols) == 0:
+                symbols = get_local_hs_stock_symbols()
+                break
             time.sleep(3)
 
         symbol_cache_path = Path("~/.cache/hs_symbols_cache.pkl").expanduser().resolve()
