@@ -11,9 +11,9 @@ from tqdm import tqdm
 # params
 # root_dir = os.getcwd()
 # save_data_dir = os.path.join(root_dir,"data/download_qtq_3year")
-start_date = '20210101'
+start_date = '20240105'
 end_date = '20240422'
-save_stock_list_dir = '/home/codespace/.qlib/tushare_data/'
+save_stock_list_dir = '/Users/shiting.wang/.qlib/tushare_data/'
 save_data_dir = save_stock_list_dir+start_date+"to"+end_date
 
 # token设置
@@ -47,6 +47,7 @@ else:
 # 1     000002.SZ  000002   万科A   深圳     全国地产  19910129
 
 # 获取每只股票的后复权数据并保存到文件
+count = 0
 for index, row in tqdm(stock_list.iterrows()):
     ts_code = row['ts_code']
     name = row['name']
@@ -68,30 +69,26 @@ for index, row in tqdm(stock_list.iterrows()):
     # - vol: 成交量（手）-> volume
     # - amount: 成交额（千元）
 
-    hfq = ts.pro_bar(ts_code=ts_code, adj='hfq', start_date=start_date, end_date=end_date)
+    filename = os.path.join(save_data_dir, f'{ts_code}_{name}.csv')
+    if os.path.exists(filename):
+        continue
+
+    hfq = ts.pro_bar(ts_code=ts_code, adj='hfq', start_date=start_date, end_date=end_date, adjfactor=True)
     # 后复权	当日收盘价 × 当日复权因子，已check
     # qlib默认使用后复权数据，带factor，以便于计算回raw price
-
-    # 前复权
-    # qfq = ts.pro_bar(ts_code=ts_code, adj='qfq', start_date=start_date, end_date=end_date)
-
-    #提取某支股票所有复权因子
-    factor = pro.adj_factor(ts_code=ts_code, trade_date='')
-    filtered_factor = factor[(factor['trade_date'] >= start_date) & (factor['trade_date'] <= end_date)]
-    merged_df = pd.merge(hfq, filtered_factor[['trade_date', 'adj_factor']], on='trade_date', how='left')
-
+    
     # 将数据向qlib的字段转换
-    df = merged_df.rename(columns={'trade_date':'date', 'vol':'volume', 'adj_factor':'factor'})
+    df = hfq.rename(columns={'trade_date':'date', 'vol':'volume', 'adj_factor':'factor'})
     # 注意这里删除了amount，使用了raw volume，而不是adjusted volume；目前不清楚adjusted volume如何获取；
     df = df.drop(['ts_code','change', 'pct_chg','pre_close','amount'], axis=1)
     # name after the stock is ok, otherwise 
     # df['symbol'] = f'{ts_code}_{name}'
 
     # 将数据保存到文件
-    filename = os.path.join(save_data_dir, f'{ts_code}_{name}.csv')
     df.to_csv(filename, index=False)
     print(f'{filename} saved successfully.')
 
     # pro_bar接口每分钟限制为200次
-    if (index+1) % 200 == 0:
+    count += 1
+    if count % 200 == 0:
         time.sleep(63) #大于60秒 
